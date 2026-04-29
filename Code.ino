@@ -1,4 +1,6 @@
 #include <AFMotor.h>
+#include <SoftwareSerial.h>
+#include <DFRobot_MuVisionSensor.h>
 
 #define IR1 A0
 #define IR2 A1
@@ -15,13 +17,28 @@ AF_DCMotor BR(4);
 
 int SPEED = 110;
 
+SoftwareSerial muSerial(2, A5);
+DFRobot_MuVisionSensor mu(0x60);
+
+bool stopped = false;
+bool actionDone = false;
+
 void setup() {
   Serial.begin(9600);
+  muSerial.begin(9600);
 
   FL.setSpeed(SPEED);
   BL.setSpeed(SPEED);
   FR.setSpeed(SPEED);
   BR.setSpeed(SPEED);
+
+  while (mu.begin(&muSerial, kSerialMode) != 0) {
+    Serial.println("MU Vision not connected...");
+    delay(1000);
+  }
+
+  Serial.println("MU Vision connected.");
+  mu.visionBegin(VISION_TRAFFIC_CARD_DETECT);
 }
 
 void stopAll() {
@@ -35,6 +52,13 @@ void forwardMove() {
   FL.run(FORWARD);
   BL.run(FORWARD);
   FR.run(FORWARD);
+  BR.run(FORWARD);
+}
+
+void moveRight() {
+  FL.run(FORWARD);
+  BL.run(BACKWARD);
+  FR.run(BACKWARD);
   BR.run(FORWARD);
 }
 
@@ -69,6 +93,7 @@ void sharpRight() {
 }
 
 void loop() {
+
   int v1 = analogRead(IR1);
   int v2 = analogRead(IR2);
   int v3 = analogRead(IR3);
@@ -86,6 +111,52 @@ void loop() {
   Serial.print(s3); Serial.print(" ");
   Serial.print(s4); Serial.print(" ");
   Serial.println(s5);
+
+  if (s1 == 1 && s2 == 1 && s3 == 1 && s4 == 1 && s5 == 1 && stopped == false) {
+    stopAll();
+    stopped = true;
+    Serial.println("STOPPED: All IR black");
+    delay(500);
+  }
+
+  if (stopped == true && actionDone == false) {
+    stopAll();
+
+    int detected = mu.getValue(VISION_TRAFFIC_CARD_DETECT, kStatus);
+
+    if (detected) {
+      int label = mu.getValue(VISION_TRAFFIC_CARD_DETECT, kLabel);
+
+      Serial.print("Traffic card label: ");
+      Serial.println(label);
+
+      if (label == 3) {
+        Serial.println("RIGHT card detected -> Move right");
+        moveRight();
+        delay(1500);
+        stopAll();
+      } 
+      else {
+        Serial.println("Other card detected -> Move forward");
+        FL.setSpeed(SPEED);
+        BL.setSpeed(SPEED);
+        FR.setSpeed(SPEED);
+        BR.setSpeed(SPEED);
+        forwardMove();
+        delay(1500);
+        stopAll();
+      }
+
+      actionDone = true;
+    }
+
+    return;
+  }
+
+  if (stopped == true) {
+    stopAll();
+    return;
+  }
 
   if (s2 == 1 && s3 == 1 && s4 == 0) {
     slightLeft();
