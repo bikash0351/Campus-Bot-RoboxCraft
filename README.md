@@ -148,8 +148,8 @@ It is:
 ⸻
 
 👨‍💻 Author
-
-Sugam Saud
+Team - RoboxCraft
+Team Lead - Sugam Saud
 Robotics & AI Developer
 NovaMate Project Builder
 
@@ -158,24 +158,3 @@ NovaMate Project Builder
 ⭐ If you like this project
 
 Give it a ⭐ on GitHub!
-
-⸻
-
-🔥 PRO TIP (important)
-
-After pasting this:
-
-* Add real photos of your robot
-* Add demo video link (VERY IMPORTANT for judges)
-* Add circuit diagram image
-
-⸻
-
-If you want next:
-I can make:
-
-* 🔥 GitHub badges + styling (pro level)
-* 📊 Architecture diagram
-* 🎤 Hackathon pitch script from this README
-
-Just tell me 👍
