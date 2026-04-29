@@ -1,12 +1,15 @@
 #include <AFMotor.h>
 #include <SoftwareSerial.h>
 #include <DFRobot_MuVisionSensor.h>
+#include <Servo.h>
 
 #define IR1 A0
 #define IR2 A1
 #define IR3 A2
 #define IR4 A3
 #define IR5 A4
+
+#define SERVO_PIN 10
 
 int THRESHOLD = 300;
 
@@ -20,8 +23,11 @@ int SPEED = 110;
 SoftwareSerial muSerial(2, A5);
 DFRobot_MuVisionSensor mu(0x60);
 
-bool stopped = false;
-bool actionDone = false;
+Servo gateServo;
+
+int mode = 0;
+
+bool ignoreStopUntilWhite = false;
 
 void setup() {
   Serial.begin(9600);
@@ -56,6 +62,11 @@ void forwardMove() {
 }
 
 void moveRight() {
+  FL.setSpeed(SPEED);
+  BL.setSpeed(SPEED);
+  FR.setSpeed(SPEED);
+  BR.setSpeed(SPEED);
+
   FL.run(FORWARD);
   BL.run(BACKWARD);
   FR.run(BACKWARD);
@@ -92,8 +103,14 @@ void sharpRight() {
   BR.run(BACKWARD);
 }
 
-void loop() {
+void openGate() {
+  gateServo.attach(SERVO_PIN);
+  gateServo.write(90);
+  delay(1000);
+  gateServo.detach();
+}
 
+void loop() {
   int v1 = analogRead(IR1);
   int v2 = analogRead(IR2);
   int v3 = analogRead(IR3);
@@ -106,20 +123,38 @@ void loop() {
   int s4 = (v4 < THRESHOLD) ? 1 : 0;
   int s5 = (v5 < THRESHOLD) ? 1 : 0;
 
+  bool allBlack = (s1 == 1 && s2 == 1 && s3 == 1 && s4 == 1 && s5 == 1);
+  bool allWhite = (s1 == 0 && s2 == 0 && s3 == 0 && s4 == 0 && s5 == 0);
+
   Serial.print(s1); Serial.print(" ");
   Serial.print(s2); Serial.print(" ");
   Serial.print(s3); Serial.print(" ");
   Serial.print(s4); Serial.print(" ");
   Serial.println(s5);
 
-  if (s1 == 1 && s2 == 1 && s3 == 1 && s4 == 1 && s5 == 1 && stopped == false) {
+  if (mode == 3) {
     stopAll();
-    stopped = true;
-    Serial.println("STOPPED: All IR black");
-    delay(500);
+    return;
   }
 
-  if (stopped == true && actionDone == false) {
+  if (mode == 2) {
+    if (allWhite) {
+      Serial.println("ALL WHITE DETECTED -> STOP + OPEN GATE");
+      stopAll();
+      delay(300);
+
+      openGate();
+
+      mode = 3;
+      return;
+    }
+
+    moveRight();
+    delay(40);
+    return;
+  }
+
+  if (mode == 1) {
     stopAll();
 
     int detected = mu.getValue(VISION_TRAFFIC_CARD_DETECT, kStatus);
@@ -131,30 +166,33 @@ void loop() {
       Serial.println(label);
 
       if (label == 3) {
-        Serial.println("RIGHT card detected -> Move right");
-        moveRight();
-        delay(1500);
-        stopAll();
+        Serial.println("RIGHT CARD -> MOVE RIGHT UNTIL ALL WHITE");
+        mode = 2;
+        delay(300);
+        return;
       } 
       else {
-        Serial.println("Other card detected -> Move forward");
-        FL.setSpeed(SPEED);
-        BL.setSpeed(SPEED);
-        FR.setSpeed(SPEED);
-        BR.setSpeed(SPEED);
-        forwardMove();
-        delay(1500);
-        stopAll();
+        Serial.println("FORWARD/LEFT CARD -> CONTINUE LINE FOLLOWING");
+        mode = 0;
+        ignoreStopUntilWhite = true;
+        return;
       }
-
-      actionDone = true;
     }
 
     return;
   }
 
-  if (stopped == true) {
+  if (ignoreStopUntilWhite) {
+    if (!allBlack) {
+      ignoreStopUntilWhite = false;
+    }
+  }
+
+  if (allBlack && !ignoreStopUntilWhite) {
+    Serial.println("ALL BLACK -> STOP AND SCAN CARD");
     stopAll();
+    mode = 1;
+    delay(500);
     return;
   }
 
